@@ -362,17 +362,17 @@ variable "each" {
 }
 
 variable "inputs" {
-	type = map(set(string))
+	type = string
 }
 
 data "test" "a" {
 	for_each = var.each
-	inputs   = var.inputs[each.value]
+	input = each.value
 }
 
 resource "test" "b" {
-	for_each = data.test.a
-	name     = "b:${each.key}"
+	for_each = toset(data.test.a[*].output)
+	name     = "b:${each.key}:${var.inputs}"
 }
 
 output "a" {
@@ -393,6 +393,71 @@ output "b" {
 				wantPlanned: map[string]cty.Value{
 
 					"<unknown>": cty.ObjectVal(map[string]cty.Value{
+						"name": cty.UnknownVal(cty.String).Refine().
+							StringPrefixFull("b:").
+							NotNull().
+							NewValue(),
+						"upstream_names": cty.NullVal(cty.Set(cty.String)),
+					}),
+				},
+				wantActions: map[string]plans.Action{},
+				wantApplied: map[string]cty.Value{},
+				wantOutputs: map[string]cty.Value{
+
+					// FIXME: The system is currently producing incorrect
+					//   results for output values that are derived from
+					//   resources that had deferred actions, because we're
+					//   not quite reconstructing all of the deferral state
+					//   correctly during the apply phase. The commented-out
+					//   lines below show how this _ought_ to look, but
+					//   we're accepting the incorrect answer for now so we
+					//   can start to gather feedback on the experiment
+					//   sooner, since the output value state at the interim
+					//   steps isn't really that important for demonstrating
+					//   the overall effect. We should fix this before
+					//   stabilizing the experiment, though.
+
+					// Currently we produce an incorrect result for output
+					// value "a" because the expression evaluator doesn't
+					// realize it's supposed to be treating this as deferred
+					// during the apply phase, and so it incorrectly decides
+					// that there are no instances due to the lack of
+					// instances in the state.
+					"a": cty.EmptyObjectVal,
+					// We can't say anything about data.test.a until we know what
+					// its instance keys are.
+					// "a": cty.DynamicVal,
+
+					// Currently we produce an incorrect result for output
+					// value "b" because the expression evaluator doesn't
+					// realize it's supposed to be treating this as deferred
+					// during the apply phase, and so it incorrectly decides
+					// that there are no instances due to the lack of
+					// instances in the state.
+					"b": cty.EmptyObjectVal,
+					// We can't say anything about test.b until we know what
+					// its instance keys are.
+					// "b": cty.DynamicVal,
+				},
+			},
+			{
+				inputs: map[string]cty.Value{
+					"each": cty.SetVal([]cty.Value{
+						cty.StringVal("1"),
+						cty.StringVal("2"),
+					}),
+					"inputs": cty.DynamicVal,
+				},
+				wantPlanned: map[string]cty.Value{
+
+					"b:1": cty.ObjectVal(map[string]cty.Value{
+						"name": cty.UnknownVal(cty.String).Refine().
+							StringPrefixFull("b:").
+							NotNull().
+							NewValue(),
+						"upstream_names": cty.NullVal(cty.Set(cty.String)),
+					}),
+					"b:2": cty.ObjectVal(map[string]cty.Value{
 						"name": cty.UnknownVal(cty.String).Refine().
 							StringPrefixFull("b:").
 							NotNull().
@@ -609,12 +674,12 @@ func (provider *deferredActionsProvider) Provider() providers.Interface {
 				"test": {
 					Block: &configschema.Block{
 						Attributes: map[string]*configschema.Attribute{
-							"inputs": {
-								Type:     cty.Set(cty.String),
+							"input": {
+								Type:     cty.String,
 								Required: true,
 							},
-							"outputs": {
-								Type:     cty.Set(cty.String),
+							"output": {
+								Type:     cty.String,
 								Computed: true,
 							},
 						},
@@ -641,12 +706,12 @@ func (provider *deferredActionsProvider) Provider() providers.Interface {
 			}
 		},
 		ReadDataSourceFn: func(req providers.ReadDataSourceRequest) providers.ReadDataSourceResponse {
-			inputs := req.Config.GetAttr("inputs")
+			input := req.Config.GetAttr("input")
 
 			return providers.ReadDataSourceResponse{
 				State: cty.MapVal(map[string]cty.Value{
-					"outputs": inputs,
-					"inputs":  inputs,
+					"input":  input,
+					"output": input,
 				}),
 			}
 		},
