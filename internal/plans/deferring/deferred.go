@@ -124,8 +124,13 @@ func (d *Deferred) SetExternalDependencyDeferred() {
 }
 
 // DeferralAllowed checks whether deferred actions are supported by the current
-// runtime. TODO: Who should check this, and when?
+// runtime.
 func (d *Deferred) DeferralAllowed() bool {
+	// Gracefully recover from being called on nil, for tests that use
+	// MockEvalContext without a real Deferred pointer set up.
+	if d == nil {
+		return false
+	}
 	return d.deferralAllowed
 }
 
