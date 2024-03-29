@@ -617,10 +617,6 @@ func TestPlanning_DeferredChangesPropagation(t *testing.T) {
 			},
 		},
 	})
-	// TEMP: This test currently relies on the experimental module language
-	// feature of allowing unknown values in a resource's "count" argument.
-	// We should remove this if the experiment gets stabilized.
-	main.AllowLanguageExperiments(true)
 
 	componentFirstInstAddr := stackaddrs.AbsComponentInstance{
 		Stack: stackaddrs.RootStackInstance,
